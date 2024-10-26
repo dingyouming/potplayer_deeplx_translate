@@ -1,156 +1,179 @@
 ﻿/*
-    PotPlayer字幕翻译插件 - 测试版
-    功能：使用Google翻译API进行实时字幕翻译
+	real time subtitle translate for PotPlayer using DeepLx API
 */
 
-// 支持的语言列表
+// void OnInitialize()
+// void OnFinalize()
+// string GetTitle() 														-> get title for UI
+// string GetVersion														-> get version for manage
+// string GetDesc()															-> get detail information
+// string GetLoginTitle()													-> get title for login dialog
+// string GetLoginDesc()													-> get desc for login dialog
+// string GetUserText()														-> get user text for login dialog
+// string GetPasswordText()													-> get password text for login dialog
+// string ServerLogin(string User, string Pass)								-> login
+// string ServerLogout()													-> logout
+//------------------------------------------------------------------------------------------------
+// array<string> GetSrcLangs() 												-> get source language
+// array<string> GetDstLangs() 												-> get target language
+// string Translate(string Text, string &in SrcLang, string &in DstLang) 	-> do translate !!
+
+string JsonParse(string json)
+{
+	JsonReader Reader;
+	JsonValue Root;
+	string ret = "";
+	
+	if (Reader.parse(json, Root) && Root.isObject())
+	{
+		// 直接获取 data 字段的值
+		JsonValue data = Root["data"];
+		
+		// data 字段是直接的字符串
+		if (data.isString())
+		{
+			ret = data.asString();
+		}
+		
+		// 如果翻译失败，检查错误码
+		JsonValue code = Root["code"];
+		if (code.isInt() && code.asInt() != 200)
+		{
+			return "Translation Error: " + code.asInt();
+		}
+	} 
+	return ret;
+}
+
+
 array<string> LangTable = 
 {
-    "zh",     // 中文
-    "zh-CN",  // 简体中文
-    "zh-TW",  // 繁体中文
-    "en",     // 英语
-    "ja",     // 日语
-    "ko"      // 韩语
+	"en",    // 英语
+	"zh", // 简体中文
+	"es",    // 西班牙语
+	"hi",    // 印地语
+	"ar"     // 阿拉伯语
 };
 
-// 基础设置
 string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36";
-string api_key;
 
-// 插件界面显示相关函数
 string GetTitle()
 {
-    return "{$CP949=测试版翻译$}{$CP950=Test Translate$}{$CP0=Test Translate$}";
+	return "{$CP949=구글 번역$}{$CP950=DeepLx 翻譯$}{$CP0=DeepLx translate$}";
 }
 
 string GetVersion()
 {
-    return "1.0";
+	return "1";
 }
 
 string GetDesc()
 {
-    return "Google翻译API测试版";
+	return "DeepLx Translate API (http://localhost:1188)";
 }
 
-// API密钥设置相关函数
 string GetLoginTitle()
 {
-    return "设置翻译API";
+	return "Input DeepLx API key";
 }
 
 string GetLoginDesc()
 {
-    return "请输入Google翻译API密钥";
+	return "Input DeepLx API key";
 }
 
 string GetUserText()
 {
-    return "API密钥:";
+	return "API key:";
 }
 
 string GetPasswordText()
 {
-    return "";
+	return "";
 }
 
-// 登录处理函数
+string api_key;
+
 string ServerLogin(string User, string Pass)
 {
-    api_key = User;
-    if (api_key.empty()) return "fail";
-    return "200 ok";  // 成功必须返回 "200 ok"
+	api_key = User;
+	if (api_key.empty()) return "fail";
+	return "200 ok";
 }
 
 void ServerLogout()
 {
-    api_key = "";
+	api_key = "";
 }
 
-// 获取支持的语言列表
 array<string> GetSrcLangs()
 {
-    array<string> ret = LangTable;
-    ret.insertAt(0, ""); // 添加自动检测选项
-    return ret;
+	array<string> ret = LangTable;
+	
+	ret.insertAt(0, ""); // empty is auto
+	return ret;
 }
 
 array<string> GetDstLangs()
 {
-    return LangTable;
+	array<string> ret = LangTable;
+	
+	return ret;
 }
 
-// JSON解析函数
-string JsonParse(string json)
+array<string> split(string str, string delimiter) 
 {
-    JsonReader Reader;
-    JsonValue Root;
-    string ret = "";
-    
-    if (Reader.parse(json, Root) && Root.isObject())
-    {
-        // 检查响应状态码
-        JsonValue code = Root["code"];
-        if (code.isNull() || code.asInt() != 200) {
-            return "[翻译服务错误 " + code.asString() + "]";
-        }
-        
-        // 获取翻译结果
-        JsonValue data = Root["data"];
-        if (data.isString()) {
-            ret = data.asString();
-        }
-        
-        // 如果翻译结果为空但有备选项，则使用第一个备选项
-        if (ret.empty()) {
-            JsonValue alternatives = Root["alternatives"];
-            if (alternatives.isArray() && alternatives.size() > 0) {
-                ret = alternatives[0].asString();
-            }
-        }
-    }
-    
-    // 添加错误提示
-    if (ret.empty()) {
-        if (json.empty()) {
-            return "[翻译服务无响应]";
-        }
-        return "[无法获取翻译结果]";
-    }
-    
-    return ret;
+	array<string> parts;
+	int startPos = 0;
+	while (true) {
+		int index = str.findFirst(delimiter, startPos);
+		if ( index == -1 ) {
+			parts.insertLast( str.substr(startPos) );
+			break;
+		}
+		else {
+			parts.insertLast( str.substr(startPos, index - startPos) );
+			startPos = index + delimiter.length();
+		}
+	}
+	return parts;
 }
 
-// 翻译主函数
 string Translate(string Text, string &in SrcLang, string &in DstLang)
 {
-    //if (Text.empty()) return "";
-    
-    // 设置源语言
-    if (SrcLang.length() <= 0) SrcLang = "auto";
-    SrcLang.MakeLower();
-    
-    // URL编码
-    string enc = HostUrlEncode(Text);
-    
-    // 构建API请求
-    string url = "https://translation.googleapis.com/language/translate/v2";
-    url += "?target=" + DstLang;
-    url += "&q=" + enc;
-    if (SrcLang != "auto") url += "&source=" + SrcLang;
-    url += "&key=" + api_key;
-    
-    // 发送请求并获取结果
-    string response = HostUrlGetString(url, UserAgent);
-    string result = JsonParse(response);
-    
-    // 设置编码
-    if (result.length() > 0)
-    {
-        SrcLang = "UTF8";
-        DstLang = "UTF8";
-    }
-    
-    return result;
+	string UNICODE_RLE = "\u202B";
+	
+	if (SrcLang.length() <= 0) SrcLang = "en";
+	
+	// 转换为大写以匹配 API 要求
+	SrcLang.MakeUpper();  // 改为大写，因为 API 示例中用的是 "EN"
+	DstLang.MakeLower();  // 目标语言保持小写，因为 API 示例中用的是 "zh"
+	
+	// 确保文本被正确转义
+	string escapedText = Text;
+	escapedText.replace("\\", "\\\\");
+	escapedText.replace("\"", "\\\"");
+	
+	// 构建 JSON 请求体，完全匹配成功的示例格式
+	string jsonBody = "{\"text\":\"" + escapedText + "\",\"source_lang\":\"" + SrcLang + "\",\"target_lang\":\"" + DstLang + "\"}";
+	
+	// DeepLx API 调用
+	string url = "http://localhost:1188/translate";
+	string SendHeader = "Content-Type: application/json";
+	
+	string text = HostUrlGetString(url, UserAgent, SendHeader, jsonBody);
+	
+	if (text.length() > 0)
+	{
+		string ret = JsonParse(text);
+		if (ret.length() > 0)
+		{
+			if (DstLang == "fa" || DstLang == "ar" || DstLang == "he") ret = UNICODE_RLE + ret;
+			SrcLang = "UTF8";
+			DstLang = "UTF8";
+			return ret;
+		}
+	}
+	
+	return "Translation failed";
 }
