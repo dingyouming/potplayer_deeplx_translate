@@ -90,33 +90,42 @@ string JsonParse(string json)
     
     if (Reader.parse(json, Root) && Root.isObject())
     {
+        // 检查响应状态码
+        JsonValue code = Root["code"];
+        if (code.isNull() || code.asInt() != 200) {
+            return "[翻译服务错误 " + code.asString() + "]";
+        }
+        
+        // 获取翻译结果
         JsonValue data = Root["data"];
-            
-        if (data.isObject())
-        {
-            JsonValue translations = data["translations"];
-            
-            if (translations.isArray())
-            {
-                JsonValue translation = translations[0];
-                if (translation.isObject())
-                {
-                    JsonValue translatedText = translation["translatedText"];
-                    if (translatedText.isString()) 
-                    {
-                        ret = translatedText.asString();
-                    }
-                }
+        if (data.isString()) {
+            ret = data.asString();
+        }
+        
+        // 如果翻译结果为空但有备选项，则使用第一个备选项
+        if (ret.empty()) {
+            JsonValue alternatives = Root["alternatives"];
+            if (alternatives.isArray() && alternatives.size() > 0) {
+                ret = alternatives[0].asString();
             }
         }
-    } 
+    }
+    
+    // 添加错误提示
+    if (ret.empty()) {
+        if (json.empty()) {
+            return "[翻译服务无响应]";
+        }
+        return "[无法获取翻译结果]";
+    }
+    
     return ret;
 }
 
 // 翻译主函数
 string Translate(string Text, string &in SrcLang, string &in DstLang)
 {
-    if (Text.empty()) return "";
+    //if (Text.empty()) return "";
     
     // 设置源语言
     if (SrcLang.length() <= 0) SrcLang = "auto";
